@@ -19,13 +19,22 @@ import math, sys, os
 import time, datetime
 # from grompy.tpxio import *
 import logging
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 # logger = logging.getLogger('gmxwrapper')
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 
 
 class Gmxtc():
-    def __init__(self):
+    def __init__(self,logger=None):
+        if logger is None:
+    	    logger=logging.getLogger("Gmxtc")
+    	    logger.setLevel(logging.INFO)
+    	    self.logger=logger
+	else:
+    	    self.logger=logger
+
+    
+    
         self.natoms = c_int()
         self.step = c_int()
         self.time = c_real()
@@ -42,7 +51,7 @@ class Gmxtc():
         modeptr = c_char_p(mode)
         libgmx.open_xtc.restype = POINTER(t_fileio)
         self.xtcfh = libgmx.open_xtc(fileptr, modeptr)
-        logger.debug("%s File opened in %s mode", filename, mode)
+        self.logger.debug("%s File opened in %s mode", filename, mode)
         
     def read_first_xtc(self):
         ret = libgmx.read_first_xtc(self.xtcfh, byref(self.natoms), byref(self.step), \
@@ -50,7 +59,7 @@ class Gmxtc():
               byref(self.bOK))
         if ret != 1:
                 raise GMXctypesError, "read_first_xtc did not return 1"
-        logger.debug("First frame read successfully")
+        self.logger.debug("First frame read successfully")
         return ret       
         
     def read_next_xtc(self):
@@ -69,7 +78,7 @@ class Gmxtc():
 
         self.xtcfh = libgmx.gmx_fio_open(c_char_p(filename), c_char_p("r"))
         
-        logger.debug("%s File opened", filename)
+        self.logger.debug("%s File opened", filename)
         
         self.read_first_xtc()
         if (time is not None) and (stepno is None) :
@@ -83,7 +92,7 @@ class Gmxtc():
         ret = self.read_next_xtc()
         if ret != 1:
                 raise SystemExit("Cannot read step %f, time %f\n", stepno, time)
-        logger.debug("Time %f loaded successfuly:Step %d", self.time.value, self.step.value)
+        self.logger.debug("Time %f loaded successfuly:Step %d", self.time.value, self.step.value)
         self.close_xtc()
         
         
@@ -127,22 +136,26 @@ class Gmxtc():
             frcopy = np.copy(fr)
             coords.append(frcopy)
             itr = itr + 1
-            if itr % 500 == 0 : logger.debug("%d frames loaded from %s", itr, xtcfile)
+            if itr % 500 == 0 : self.logger.debug("%d frames loaded from %s", itr, xtcfile)
             if ((skip > 1) and (vflag == True)):
-                seektime = c_real(self.time.value + initvalue * skip)
+                seektime = c_real(self.time.value + deltatime * skip)
                 ret = libgmx.xtc_seek_time(self.xtcfh, seektime, self.natoms)
             if ret > -1:    
                 ret = self.read_next_xtc()
             if ((skip > 1) and (vflag == False)):
                 vflag = True
-                initvalue = self.time.value
-                seektime = c_real(self.time.value + initvalue * (skip - 1))
-                ret = libgmx.xtc_seek_time(self.xtcfh, seektime, self.natoms)
-                if ret > -1:    
-                    ret = self.read_next_xtc()
+                fr0time = round(self.time.value,3)
+                #seektime = c_real(self.time.value + initvalue * (skip - 1))
+                #ret = libgmx.xtc_seek_time(self.xtcfh, seektime, self.natoms)
+                #if ret > -1:    
+                ret = self.read_next_xtc()
+                fr1time = round(self.time.value,3)
+                deltatime=fr1time-fr0time
+                self.logger.debug("Using %s as timestep between frames",deltatime)
+                
         coordout = np.vstack(coords).reshape(itr, natoms, 3)
         runtime = datetime.timedelta(seconds=(time.time() - stime))
-        logger.info("%s time required loading %d frames from %s\n", runtime, itr, xtcfile)
+        self.logger.info("%s time required loading %d frames from %s\n", runtime, itr, xtcfile)
         return coordout
     
     def load_all_frames(self, xtcfile, skip=1, bPBC=0, nframes=1,
@@ -192,7 +205,7 @@ class Gmxtc():
             boxes.append(self.box)
             times.append(self.time)
             itr = itr + 1
-            if itr % 500 == 0 : logger.debug("%d frames loaded from %s", itr, xtcfile)
+            if itr % 500 == 0 : self.logger.debug("%d frames loaded from %s", itr, xtcfile)
             if ((skip > 1) and (vflag == True)):
                 seektime = c_real(self.time.value + initvalue * skip)
                 ret = libgmx.xtc_seek_time(self.xtcfh, seektime, self.natoms)
@@ -207,7 +220,7 @@ class Gmxtc():
                     ret = self.read_next_xtc()
         coordout = np.vstack(coords).reshape(itr, natoms, 3)
         runtime = datetime.timedelta(seconds=(time.time() - stime))
-        logger.info("%s time required loading %d frames from %s\n", runtime, itr, xtcfile)
+        self.logger.info("%s time required loading %d frames from %s\n", runtime, itr, xtcfile)
         return coordout,boxes,times,prec
 
     def get_trajlength(self, xtcfile):
@@ -226,7 +239,7 @@ class Gmxtc():
         while ret == 1:
             itr = itr + 1
             ret = self.read_next_xtc()
-            if itr % 500 == 0 : logger.debug("%d frames read from %s", itr, xtcfile)
+            if itr % 500 == 0 : self.logger.debug("%d frames read from %s", itr, xtcfile)
 #           This turned out to be slower than going through one frame
 #           at a time.
 #            if (itr == 1):
@@ -251,7 +264,7 @@ class Gmxtc():
 #                    currtime = currtime + dt
                     
         runtime = datetime.timedelta(seconds=(time.time() - stime))
-        logger.info("%s time required counting %d frames from %s\n", runtime, itr, xtcfile)
+        self.logger.info("%s time required counting %d frames from %s\n", runtime, itr, xtcfile)
         return itr 
 
 
@@ -266,7 +279,7 @@ class Gmxtc():
         
     def write_array_as_traj(self, filename, traj, boxs, times, prec):
         self.open_xtc(filename, 'w')
-        logger.info("Opening %s for writing", filename)
+        self.logger.info("Opening %s for writing", filename)
         nframes, natoms = traj.shape[0], traj.shape[1]
         step = 0
         rvec_p = POINTER(rvec)
