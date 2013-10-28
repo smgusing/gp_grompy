@@ -12,14 +12,14 @@ metadata = {
     'version': VERSION,
     'author': __author__,
     'license': 'GPL version 2 or later',
+    'author_email': 'togurpreet@gmail.com',
+    'url': 'https://sites.google.com/site/togurpreet/Home',
     'install_requires': ['numpy' ],
     'platforms': ["Linux"],
     'zip_safe': False,
-    'description': "Tools for data analysis",
-    'long_description': """The code contains tools that were useful in my research.
-    Most of the code in this collection is either copied directly or 
-    is inspired by other codes, that I had to tinker with, to make it more suitable for my work
-    You are free to do the same :-)
+    'description': "python wrappers for gromacs",
+    'long_description': """
+    Code is based on grompy.
     """}
 
 
@@ -39,16 +39,6 @@ def configuration():
 
     config.set_options(assume_default_configuration=True, delegate_options_to_subpackages=True,
                        quiet=False)
-    # add the scipts, so they can be called from the command line
-    #config.add_scripts([e for e in glob('scripts/*.py') if not e.endswith('__.py')])
-    
-    # add scripts as a subpackage (so they can be imported from other scripts)
-    #config.add_subpackage('scripts',subpackage_path=None)
-
-    # add gp_wham subpackage
-    #config.add_subpackage('wham', subpackage_path='src/python/wham')
-
-
     return config
 
 metadata['configuration'] = configuration

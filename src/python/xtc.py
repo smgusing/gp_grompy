@@ -19,22 +19,18 @@ import math, sys, os
 import time, datetime
 # from grompy.tpxio import *
 import logging
-#logger = logging.getLogger(__name__)
-# logger = logging.getLogger('gmxwrapper')
-#logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+formatter = logging.Formatter(fmt='[%(levelname)s:%(filename)s] %(message)s')
+ch.setFormatter(formatter)
+logger=logging.getLogger()
+#logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(ch)
+
 
 
 class Gmxtc():
     def __init__(self,logger=None):
-        if logger is None:
-    	    logger=logging.getLogger("Gmxtc")
-    	    logger.setLevel(logging.INFO)
-    	    self.logger=logger
-	else:
-    	    self.logger=logger
-
-    
-    
         self.natoms = c_int()
         self.step = c_int()
         self.time = c_real()
@@ -51,7 +47,7 @@ class Gmxtc():
         modeptr = c_char_p(mode)
         libgmx.open_xtc.restype = POINTER(t_fileio)
         self.xtcfh = libgmx.open_xtc(fileptr, modeptr)
-        self.logger.debug("%s File opened in %s mode", filename, mode)
+        logger.debug("%s File opened in %s mode", filename, mode)
         
     def read_first_xtc(self):
         ret = libgmx.read_first_xtc(self.xtcfh, byref(self.natoms), byref(self.step), \
@@ -59,7 +55,7 @@ class Gmxtc():
               byref(self.bOK))
         if ret != 1:
                 raise GMXctypesError, "read_first_xtc did not return 1"
-        self.logger.debug("First frame read successfully")
+        logger.debug("First frame read successfully")
         return ret       
         
     def read_next_xtc(self):
@@ -72,32 +68,76 @@ class Gmxtc():
         
         return ret
     
-    def read_frame(self, filename, time=None, stepno=None):
+    def read_timeframe(self, filename, time=None):
         if not os.path.isfile(filename):
             raise SystemExit(filename, "not found")
 
         self.xtcfh = libgmx.gmx_fio_open(c_char_p(filename), c_char_p("r"))
         
-        self.logger.debug("%s File opened", filename)
+        logger.debug("%s File opened", filename)
         
         self.read_first_xtc()
-        if (time is not None) and (stepno is None) :
+        ### bug in reading frame using seektime when it is the first frame##
+        if time == 0:
+            self.close_xtc()
+            return
+            
+        if (time is not None) :
+            if (self.time.value != 0):
+                logger.warn("Initial time is not zero %s. Will add to time"%round(self.time.value,3))
+                time += round(self.time.value,3)
+        else:
+            raise SystemExit("provide timeframe to extract")
+        
         # int xtc_seek_time(t_fileio *fio, real time, int natoms);
-            ret = libgmx.xtc_seek_time(self.xtcfh, c_real(time), self.natoms)
-        if (stepno is not None) and (time is None) :
+        ret = libgmx.xtc_seek_time(self.xtcfh, c_real(time), self.natoms)
+            
+        if ret != 0:
+                raise SystemExit("Cannot find step %f time %f\n", stepno, time)
+            
+        ret = self.read_next_xtc()
+        
+        if round(self.time.value,3) != time:
+            mes="Time loaded {0} does not match time requested {1}".format(self.time.value,time)
+            raise SystemExit(mes)
+        
+#         if ret != 1:
+#                 raise SystemExit("Cannot read step %f, time %f\n", stepno, time)
+        logger.debug("Time %f loaded successfuly:Step %d", self.time.value,
+                      self.step.value)
+        
+        self.close_xtc()
+        
+    def read_stepframe(self, filename, stepno=None):
+        
+        if not os.path.isfile(filename):
+            raise SystemExit(filename, "not found")
+
+        self.xtcfh = libgmx.gmx_fio_open(c_char_p(filename), c_char_p("r"))
+        
+        logger.debug("%s File opened", filename)
+        
+        self.read_first_xtc()
+            
+        if (stepno is not None):
+            if (self.step.value != 0):
+                logger.warn("Initial step is not zero %s. Will add to step"%self.time.value)
+                stepno += self.step.value
             ret = libgmx.xtc_seek_frame(self.xtcfh, c_int(stepno), self.natoms)
             
         if ret != 0:
                 raise SystemExit("Cannot find step %f time %f\n", stepno, time)
+            
         ret = self.read_next_xtc()
+        
         if ret != 1:
                 raise SystemExit("Cannot read step %f, time %f\n", stepno, time)
-        self.logger.debug("Time %f loaded successfuly:Step %d", self.time.value, self.step.value)
+        logger.debug("Time %f loaded successfuly:Step %d", self.time.value,
+                      self.step.value)
         self.close_xtc()
         
-        
     def load_traj(self, xtcfile, skip=1, bPBC=0, nframes=1,
-                  isize=None, index=None, tprfile='xa.tpr'):
+                  isize=None, index=None, tprfile=None):
         """
         """
         stime = time.time()
@@ -110,16 +150,22 @@ class Gmxtc():
             tpr.read_tprfile(tprfile)
             gpbc = libgmx.gmx_rmpbc_init(byref(self.top.idef), self.cePBC, self.natoms, self.box)
             bPBC = c_int(bPBC)
+
         self.open_xtc(xtcfile, 'r')
         ret = self.read_first_xtc()
+
         if isize == None:
             natoms = self.natoms.value  # read full traj
             index = np.arange(natoms)
-        else: 
+        else:
             natoms = isize
-        coords = []    
+
+        coords = []
         itr = 0
         vflag = False
+        fr0time = round(self.time.value,3)
+        logger.debug("Timestamp on first frame %s",fr0time)
+
         while ret == 1:
             if bPBC == 1:
                 libgmx.gmx_rmpbc(gpbc, self.natoms, self.box, self.xp)
@@ -136,27 +182,38 @@ class Gmxtc():
             frcopy = np.copy(fr)
             coords.append(frcopy)
             itr = itr + 1
-            if itr % 500 == 0 : self.logger.debug("%d frames loaded from %s", itr, xtcfile)
+            if itr % 500 == 0 : logger.debug("%d frames loaded from %s", itr, xtcfile)
+            # if we know the delta time between frames then 
+            # move to next frame
             if ((skip > 1) and (vflag == True)):
                 seektime = c_real(self.time.value + deltatime * skip)
                 ret = libgmx.xtc_seek_time(self.xtcfh, seektime, self.natoms)
-            if ret > -1:    
+
+            # Read next frame
+            if ret > -1:
                 ret = self.read_next_xtc()
+
+            # if we are doing this first time    
             if ((skip > 1) and (vflag == False)):
                 vflag = True
-                fr0time = round(self.time.value,3)
                 #seektime = c_real(self.time.value + initvalue * (skip - 1))
                 #ret = libgmx.xtc_seek_time(self.xtcfh, seektime, self.natoms)
                 #if ret > -1:    
-                ret = self.read_next_xtc()
                 fr1time = round(self.time.value,3)
                 deltatime=fr1time-fr0time
-                self.logger.debug("Using %s as timestep between frames",deltatime)
-                
+                logger.debug("Using %s as timestep between frames",deltatime)
+
+                seektime = c_real(fr0time + deltatime * skip)
+                ret = libgmx.xtc_seek_time(self.xtcfh, seektime, self.natoms)
+                if ret > -1:
+                    ret = self.read_next_xtc()
+
         coordout = np.vstack(coords).reshape(itr, natoms, 3)
         runtime = datetime.timedelta(seconds=(time.time() - stime))
-        self.logger.info("%s time required loading %d frames from %s\n", runtime, itr, xtcfile)
+        logger.info("%d frames from %s loaded", itr, xtcfile)
+        logger.debug("%s time required loading %d frames from %s", runtime, itr, xtcfile)
         return coordout
+       
     
     def load_all_frames(self, xtcfile, skip=1, bPBC=0, nframes=1,
                   isize=None, index=None, tprfile='xa.tpr'):
@@ -205,7 +262,7 @@ class Gmxtc():
             boxes.append(self.box)
             times.append(self.time)
             itr = itr + 1
-            if itr % 500 == 0 : self.logger.debug("%d frames loaded from %s", itr, xtcfile)
+            if itr % 500 == 0 : logger.debug("%d frames loaded from %s", itr, xtcfile)
             if ((skip > 1) and (vflag == True)):
                 seektime = c_real(self.time.value + initvalue * skip)
                 ret = libgmx.xtc_seek_time(self.xtcfh, seektime, self.natoms)
@@ -220,7 +277,7 @@ class Gmxtc():
                     ret = self.read_next_xtc()
         coordout = np.vstack(coords).reshape(itr, natoms, 3)
         runtime = datetime.timedelta(seconds=(time.time() - stime))
-        self.logger.info("%s time required loading %d frames from %s\n", runtime, itr, xtcfile)
+        logger.info("%s time required loading %d frames from %s\n", runtime, itr, xtcfile)
         return coordout,boxes,times,prec
 
     def get_trajlength(self, xtcfile):
@@ -239,32 +296,10 @@ class Gmxtc():
         while ret == 1:
             itr = itr + 1
             ret = self.read_next_xtc()
-            if itr % 500 == 0 : self.logger.debug("%d frames read from %s", itr, xtcfile)
-#           This turned out to be slower than going through one frame
-#           at a time.
-#            if (itr == 1):
-#                # need two frames to know dt    
-#                ret = self.read_next_xtc()
-#                # if only 1 frame
-#                if ret != 1:
-#                    break
-#                # # read two frames so far
-#                itr = itr + 1
-#                fr1time = self.time.value
-#                vflag = True
-#                dt = fr1time - fr0time
-#                dt = np.round_(dt, decimals=3)
-#                currtime = fr1time
-#                
-#            if (vflag == True):
-#                seektime = c_real(currtime + dt)
-#                ret = libgmx.xtc_seek_time(self.xtcfh, seektime, self.natoms)
-#                if ret > -1:
-#                    ret = 1    
-#                    currtime = currtime + dt
+            if itr % 500 == 0 : logger.debug("%d frames read from %s", itr, xtcfile)
                     
         runtime = datetime.timedelta(seconds=(time.time() - stime))
-        self.logger.info("%s time required counting %d frames from %s\n", runtime, itr, xtcfile)
+        logger.info("%s time required counting %d frames from %s\n", runtime, itr, xtcfile)
         return itr 
 
 
@@ -279,7 +314,7 @@ class Gmxtc():
         
     def write_array_as_traj(self, filename, traj, boxs, times, prec):
         self.open_xtc(filename, 'w')
-        self.logger.info("Opening %s for writing", filename)
+        logger.info("Opening %s for writing", filename)
         nframes, natoms = traj.shape[0], traj.shape[1]
         step = 0
         rvec_p = POINTER(rvec)
@@ -333,7 +368,7 @@ class Gmxtc():
         '''
         buffer_from_memory = ctypes.pythonapi.PyBuffer_FromMemory
         buffer_from_memory.restype = ctypes.py_object
-        rvec_p = POINTER(rvec)
+        #rvec_p = POINTER(rvec)
         natoms = self.natoms.value
         #fr = np.ctypeslib.as_array((rvec * natoms).from_address(ctypes.addressof(self.xp.contents)))
         buf = buffer_from_memory(self.xp, 4 * natoms * 3)

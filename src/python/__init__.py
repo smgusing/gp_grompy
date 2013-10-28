@@ -14,13 +14,13 @@ from os import environ
 __all__ = ["stx","xtc","ndx","types"]
 
 import logging
-logger = logging.getLogger(__name__)
-#logger.setLevel(logging.DEBUG)
-#ch = logging.StreamHandler(sys.stdout)
-#formatter = logging.Formatter(fmt='%(filename)s:%(funcName)s:%(message)s')
-#ch.setFormatter(formatter)
-#logger.addHandler(ch)
-#logger.propagate = False
+logger = logging.getLogger("gp_grompy")
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+formatter = logging.Formatter(fmt='[gp_grompy]%(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+logger.propagate = False
 
 
 from ctypes import c_float,\
