@@ -1,5 +1,5 @@
 from ctypes import c_int
-#version 0.10
+
 # This file is copied from GromPy
 # See original program at https://github.com/GromPy/GromPy for further details
 

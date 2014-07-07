@@ -1,14 +1,3 @@
-#! /usr/bin/env python
-# -*- coding: utf-8 -*-
-
-##############################################################################3
-
-# NOTE: Work in progress. The code is built on Martin hoefling's code 
-# Visit git://github.com/GromPy/GromPy.git for further details.
-# Author: Gurpreet Singh
-# Date: 12-Feb-13
-# version 0.1
-###############################################################################
 from ctypes import c_char, byref, POINTER, c_int, c_char_p
 import ctypes
 from gp_grompy.types import t_topology, t_atoms, t_trxstatus, output_env_t, \
@@ -17,16 +6,8 @@ from gp_grompy import libgmx, rvec, matrix, c_real
 import numpy as np
 import math, sys, os
 import time, datetime
-# from grompy.tpxio import *
 import logging
-ch = logging.StreamHandler()
-formatter = logging.Formatter(fmt='[%(levelname)s:%(filename)s] %(message)s')
-ch.setFormatter(formatter)
-logger=logging.getLogger()
-#logger.setLevel(logging.INFO)
-logger.setLevel(logging.DEBUG)
-logger.addHandler(ch)
-
+logger = logging.getLogger(__name__)
 
 
 class Gmxtc():
@@ -363,6 +344,7 @@ class Gmxtc():
                 fr[i, j] = self.xp[i][j]
         
         return fr
+    
     def x_to_array(self):
         ''' convert coordinates to numpy array
         '''
@@ -387,3 +369,20 @@ class Gmxtc():
         fileptr = c_char_p(filename)
         self.natoms = libgmx.read_first_x(oenv, byref(status), fileptr, byref(self.time), byref(self.xp), self.box)
         print self.natoms
+        
+    def copybox(self):
+        ''' 
+        '''
+#         buffer_from_memory = ctypes.pythonapi.PyBuffer_FromMemory
+#         buffer_from_memory.restype = ctypes.py_object
+#         buf = buffer_from_memory(self.box, 4 * 3 * 3)
+#         box=np.ndarray((3, 3),dtype=np.float32, order='C',
+#                      buffer=buf)
+#         newbox = np.copy(box)
+#         newboxp = newbox.ctypes.data_as(matrix)
+#         return newboxp
+        newbox = matrix()
+        itr = ((x,y) for x in range(3) for y in range(3))
+        for x,y in itr:
+            newbox[x][y] = self.box[x][y] 
+        return newbox

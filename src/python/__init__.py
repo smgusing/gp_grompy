@@ -1,26 +1,31 @@
 ################################################################
+# NOTE: Work in progress. The code is built on Martin hoefling's code 
+# Visit git://github.com/GromPy/GromPy.git for further details.
+
 ## The file is a modified copy of grompy.
-## See Grompy for original author information
-## Modified By, Gurpreet Singh
-## version 0.10
-## 
 ################################################################
 import os
 import glob
 import sys
 from os import environ
+import logging
+
+### Set up version information####
+__version__ = pkgres.require("gp_grompy")[0].version
 
 
 __all__ = ["stx","xtc","ndx","types"]
 
-import logging
-logger = logging.getLogger("gp_grompy")
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-formatter = logging.Formatter(fmt='[gp_grompy]%(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+########################################
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+sh = logging.StreamHandler(sys.stdout)
+#formatter = logging.Formatter(fmt='[%(name)s] %(message)s')
+formatter = logging.Formatter(fmt='[%(asctime)s %(name)s] %(message)s',datefmt='%I:%M:%S')
+sh.setFormatter(formatter)
+logger.addHandler(sh)
 logger.propagate = False
+#########################################
 
 
 from ctypes import c_float,\
@@ -67,8 +72,6 @@ tensor    = c_real*3*3
 from ndx import Gmndx
 from xtc import Gmxtc
 from stx import Gmstx
-#from rmsfit import Rmsfit
-#import types
 ########################################################################
 
 

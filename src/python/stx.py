@@ -1,10 +1,4 @@
 
-##############################################################################3
-# NOTE: Work in progress. The code is built on Martin hoefling's code 
-# Visit git://github.com/GromPy/GromPy.git for further details.
-# Author: Gurpreet Singh
-# Date: 12-Feb-13
-# version 0.1
 ###############################################################################
 from ctypes import c_char, byref, POINTER, c_int, c_char_p
 import ctypes
@@ -14,12 +8,8 @@ from gp_grompy import libgmx, rvec, matrix, c_real
 import numpy as np
 import math,sys,os
 import time,datetime
-# from grompy.tpxio import *
 import logging
 logger = logging.getLogger(__name__)
-#logger = logging.getLogger('gmxwrapper')
-#logger.setLevel(logging.DEBUG)
-
 
 class Gmstx():
     def __init__(self):
