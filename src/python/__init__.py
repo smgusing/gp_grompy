@@ -9,7 +9,7 @@ import glob
 import sys
 from os import environ
 import logging
-
+import pkg_resources as pkgres
 ### Set up version information####
 __version__ = pkgres.require("gp_grompy")[0].version
 

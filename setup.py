@@ -4,7 +4,7 @@ from glob import glob
 
 VERSION = "0.2.dev"
 ISRELEASED = False
-__author__ = "Gurpreet"
+__author__ = "Gurpreet Singh"
 __version__ = VERSION
 
 # metadata for setup()
