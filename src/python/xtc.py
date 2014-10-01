@@ -386,3 +386,8 @@ class Gmxtc():
         for x,y in itr:
             newbox[x][y] = self.box[x][y] 
         return newbox
+    
+    def clear(self):
+        ''' clear the memory allocated to xp pointer
+        '''
+        libgmx.save_free(None,None,0,self.xp)
